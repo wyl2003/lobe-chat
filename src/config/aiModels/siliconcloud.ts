@@ -1,5 +1,7 @@
 import { AIChatModelCard } from '@/types/aiModel';
 
+// https://siliconflow.cn/zh-cn/models
+
 const siliconcloudChatModels: AIChatModelCard[] = [
   {
     abilities: {
@@ -20,7 +22,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
-      functionCall: true,
+      // Not support tool use, ref: https://cloud.siliconflow.cn/models?target=deepseek-ai%2FDeepSeek-V3
+      functionCall: false,
     },
     contextWindowTokens: 65_536,
     description:
@@ -28,10 +31,42 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     displayName: 'DeepSeek V3',
     enabled: true,
     id: 'deepseek-ai/DeepSeek-V3',
-    pricing: { // 2.9 涨价
+    pricing: {
       currency: 'CNY',
-      input: 1,
-      output: 2,
+      input: 2,
+      output: 8,
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      reasoning: true,
+    },
+    contextWindowTokens: 65_536,
+    description:
+      'DeepSeek-R1 是一款强化学习（RL）驱动的推理模型，解决了模型中的重复性和可读性问题。在 RL 之前，DeepSeek-R1 引入了冷启动数据，进一步优化了推理性能。它在数学、代码和推理任务中与 OpenAI-o1 表现相当，并且通过精心设计的训练方法，提升了整体效果。',
+    displayName: 'DeepSeek R1 (Pro)',
+    id: 'Pro/deepseek-ai/DeepSeek-R1',
+    pricing: {
+      currency: 'CNY',
+      input: 4,
+      output: 16,
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+    },
+    contextWindowTokens: 65_536,
+    description:
+      'DeepSeek-V3 是一款拥有 6710 亿参数的混合专家（MoE）语言模型，采用多头潜在注意力（MLA）和 DeepSeekMoE 架构，结合无辅助损失的负载平衡策略，优化推理和训练效率。通过在 14.8 万亿高质量tokens上预训练，并进行监督微调和强化学习，DeepSeek-V3 在性能上超越其他开源模型，接近领先闭源模型。',
+    displayName: 'DeepSeek V3 (Pro)',
+    id: 'Pro/deepseek-ai/DeepSeek-V3',
+    pricing: { 
+      currency: 'CNY',
+      input: 2,
+      output: 8,
     },
     type: 'chat',
   },
@@ -191,9 +226,25 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768,
     description:
-      'QwQ-32B-Preview是Qwen 最新的实验性研究模型，专注于提升AI推理能力。通过探索语言混合、递归推理等复杂机制，主要优势包括强大的推理分析能力、数学和编程能力。与此同时，也存在语言切换问题、推理循环、安全性考虑、其他能力方面的差异。',
-    displayName: 'QwQ 32B Preview',
+      'QwQ 是 Qwen 系列的推理模型。与传统的指令调优模型相比，QwQ 具备思考和推理能力，能够在下游任务中实现显著增强的性能，尤其是在解决困难问题方面。QwQ-32B 是中型推理模型，能够在与最先进的推理模型（如 DeepSeek-R1、o1-mini）的对比中取得有竞争力的性能。该模型采用 RoPE、SwiGLU、RMSNorm 和 Attention QKV bias 等技术，具有 64 层网络结构和 40 个 Q 注意力头（GQA 架构中 KV 为 8 个）。',
+    displayName: 'QwQ 32B',
     enabled: true,
+    id: 'Qwen/QwQ-32B',
+    pricing: {
+      currency: 'CNY',
+      input: 1,
+      output: 4,
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      reasoning: true,
+    },
+    contextWindowTokens: 32_768,
+    description:
+      'QwQ-32B-Preview 是 Qwen 最新的实验性研究模型，专注于提升AI推理能力。通过探索语言混合、递归推理等复杂机制，主要优势包括强大的推理分析能力、数学和编程能力。与此同时，也存在语言切换问题、推理循环、安全性考虑、其他能力方面的差异。',
+    displayName: 'QwQ 32B Preview',
     id: 'Qwen/QwQ-32B-Preview',
     pricing: {
       currency: 'CNY',
