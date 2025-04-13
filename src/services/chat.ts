@@ -8,7 +8,7 @@ import { INBOX_GUIDE_SYSTEMROLE } from '@/const/guide';
 import { INBOX_SESSION_ID } from '@/const/session';
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
 import { TracePayload, TraceTagMap } from '@/const/trace';
-import { isDeprecatedEdition, isServerMode } from '@/const/version';
+import { isDeprecatedEdition, isDesktop, isServerMode } from '@/const/version';
 import {
   AgentRuntime,
   AgentRuntimeError,
@@ -32,6 +32,7 @@ import {
   userProfileSelectors,
 } from '@/store/user/selectors';
 import { WebBrowsingManifest } from '@/tools/web-browsing';
+import { WorkingModel } from '@/types/agent';
 import { ChatErrorType } from '@/types/fetch';
 import { ChatMessage, MessageToolCall } from '@/types/message';
 import type { ChatStreamPayload, OpenAIChatMessage } from '@/types/openai/chat';
@@ -132,7 +133,7 @@ interface CreateAssistantMessageStream extends FetchSSEOptions {
  *
  * **Note**: if you try to fetch directly, use `fetchOnClient` instead.
  */
-export function initializeWithClientStore(provider: string, payload: any) {
+export function initializeWithClientStore(provider: string, payload?: any) {
   /**
    * Since #5267, we map parameters for client-fetch in function `getProviderAuthPayload`
    * which called by `createPayloadWithKeyVaults` below.
@@ -201,17 +202,10 @@ class ChatService {
 
     // ============  2. preprocess tools   ============ //
 
-    let filterTools = toolSelectors.enabledSchema(pluginIds)(getToolStoreState());
-
-    // check this model can use function call
-    const canUseFC = isCanUseFC(payload.model, payload.provider!);
-
-    // the rule that model can use tools:
-    // 1. tools is not empty
-    // 2. model can use function call
-    const shouldUseTools = filterTools.length > 0 && canUseFC;
-
-    const tools = shouldUseTools ? filterTools : undefined;
+    const tools = this.prepareTools(pluginIds, {
+      model: payload.model,
+      provider: payload.provider!,
+    });
 
     // ============  3. process extend params   ============ //
 
@@ -371,10 +365,7 @@ class ChatService {
       smoothing:
         providerConfig?.settings?.smoothing ||
         // @deprecated in V2
-        providerConfig?.smoothing ||
-        // use smoothing when enable client fetch
-        // https://github.com/lobehub/lobe-chat/issues/3800
-        enableFetchOnClient,
+        providerConfig?.smoothing,
     });
   };
 
@@ -433,15 +424,31 @@ class ChatService {
     onLoadingChange?.(true);
 
     try {
-      await this.getChatCompletion(params, {
-        onErrorHandle: (error) => {
-          errorHandle(new Error(error.message), error);
-        },
-        onFinish,
-        onMessageHandle,
-        signal: abortController?.signal,
-        trace: this.mapTrace(trace, TraceTagMap.SystemChain),
+      const oaiMessages = this.processMessages({
+        messages: params.messages as any,
+        model: params.model!,
+        provider: params.provider!,
+        tools: params.plugins,
       });
+      const tools = this.prepareTools(params.plugins || [], {
+        model: params.model!,
+        provider: params.provider!,
+      });
+
+      // remove plugins
+      delete params.plugins;
+      await this.getChatCompletion(
+        { ...params, messages: oaiMessages, tools },
+        {
+          onErrorHandle: (error) => {
+            errorHandle(new Error(error.message), error);
+          },
+          onFinish,
+          onMessageHandle,
+          signal: abortController?.signal,
+          trace: this.mapTrace(trace, TraceTagMap.SystemChain),
+        },
+      );
 
       onLoadingChange?.(false);
     } catch (e) {
@@ -451,7 +458,7 @@ class ChatService {
 
   private processMessages = (
     {
-      messages,
+      messages = [],
       tools,
       model,
       provider,
@@ -466,14 +473,16 @@ class ChatService {
     // handle content type for vision model
     // for the models with visual ability, add image url to content
     // refs: https://platform.openai.com/docs/guides/vision/quick-start
-    const getContent = (m: ChatMessage) => {
+    const getUserContent = (m: ChatMessage) => {
       // only if message doesn't have images and files, then return the plain content
       if ((!m.imageList || m.imageList.length === 0) && (!m.fileList || m.fileList.length === 0))
         return m.content;
 
       const imageList = m.imageList || [];
 
-      const filesContext = isServerMode ? filesPrompts({ fileList: m.fileList, imageList }) : '';
+      const filesContext = isServerMode
+        ? filesPrompts({ addUrl: !isDesktop, fileList: m.fileList, imageList })
+        : '';
       return [
         { text: (m.content + '\n\n' + filesContext).trim(), type: 'text' },
         ...imageList.map(
@@ -482,27 +491,50 @@ class ChatService {
       ] as UserMessageContentPart[];
     };
 
+    const getAssistantContent = (m: ChatMessage) => {
+      // signature is a signal of anthropic thinking mode
+      const shouldIncludeThinking = m.reasoning && !!m.reasoning?.signature;
+
+      if (shouldIncludeThinking) {
+        return [
+          {
+            signature: m.reasoning!.signature,
+            thinking: m.reasoning!.content,
+            type: 'thinking',
+          },
+          { text: m.content, type: 'text' },
+        ] as UserMessageContentPart[];
+      }
+      // only if message doesn't have images and files, then return the plain content
+
+      if (m.imageList && m.imageList.length > 0) {
+        return [
+          !!m.content ? { text: m.content, type: 'text' } : undefined,
+          ...m.imageList.map(
+            (i) => ({ image_url: { detail: 'auto', url: i.url }, type: 'image_url' }) as const,
+          ),
+        ].filter(Boolean) as UserMessageContentPart[];
+      }
+
+      return m.content;
+    };
+
     let postMessages = messages.map((m): OpenAIChatMessage => {
+      const supportTools = isCanUseFC(model, provider);
       switch (m.role) {
         case 'user': {
-          return { content: getContent(m), role: m.role };
+          return { content: getUserContent(m), role: m.role };
         }
 
         case 'assistant': {
-          // signature is a signal of anthropic thinking mode
-          const shouldIncludeThinking = m.reasoning && !!m.reasoning?.signature;
+          const content = getAssistantContent(m);
+
+          if (!supportTools) {
+            return { content, role: m.role };
+          }
 
           return {
-            content: shouldIncludeThinking
-              ? [
-                  {
-                    signature: m.reasoning!.signature,
-                    thinking: m.reasoning!.content,
-                    type: 'thinking',
-                  } as any,
-                  { text: m.content, type: 'text' },
-                ]
-              : m.content,
+            content,
             role: m.role,
             tool_calls: m.tools?.map(
               (tool): MessageToolCall => ({
@@ -518,6 +550,10 @@ class ChatService {
         }
 
         case 'tool': {
+          if (!supportTools) {
+            return { content: m.content, role: 'user' };
+          }
+
           return {
             content: m.content,
             name: genToolCallingName(m.plugin!.identifier, m.plugin!.apiName, m.plugin?.type),
@@ -668,6 +704,20 @@ class ChatService {
     });
 
     return reorderedMessages;
+  };
+
+  private prepareTools = (pluginIds: string[], { model, provider }: WorkingModel) => {
+    let filterTools = toolSelectors.enabledSchema(pluginIds)(getToolStoreState());
+
+    // check this model can use function call
+    const canUseFC = isCanUseFC(model, provider!);
+
+    // the rule that model can use tools:
+    // 1. tools is not empty
+    // 2. model can use function call
+    const shouldUseTools = filterTools.length > 0 && canUseFC;
+
+    return shouldUseTools ? filterTools : undefined;
   };
 }
 

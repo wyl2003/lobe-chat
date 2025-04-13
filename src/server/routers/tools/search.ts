@@ -20,7 +20,14 @@ export const searchRouter = router({
       }),
     )
     .mutation(async ({ input }) => {
-      const crawler = new Crawler();
+      const envString = toolsEnv.CRAWLER_IMPLS || '';
+
+      // 处理全角逗号和多余空格
+      let envValue = envString.replaceAll('，', ',').trim();
+
+      const impls = envValue.split(',').filter(Boolean);
+
+      const crawler = new Crawler({ impls });
 
       const results = await pMap(
         input.urls,
@@ -36,8 +43,14 @@ export const searchRouter = router({
   query: searchProcedure
     .input(
       z.object({
+        optionalParams: z
+          .object({
+            searchCategories: z.array(z.string()).optional(),
+            searchEngines: z.array(z.string()).optional(),
+            searchTimeRange: z.string().optional(),
+          })
+          .optional(),
         query: z.string(),
-        searchEngine: z.array(z.string()).optional(),
       }),
     )
     .query(async ({ input }) => {
@@ -48,7 +61,11 @@ export const searchRouter = router({
       const client = new SearXNGClient(toolsEnv.SEARXNG_URL);
 
       try {
-        return await client.search(input.query, input.searchEngine);
+        return await client.search(input.query, {
+          categories: input.optionalParams?.searchCategories,
+          engines: input.optionalParams?.searchEngines,
+          time_range: input.optionalParams?.searchTimeRange,
+        });
       } catch (e) {
         console.error(e);
 
