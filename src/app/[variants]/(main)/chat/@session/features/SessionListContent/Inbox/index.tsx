@@ -27,8 +27,10 @@ const Inbox = memo(() => {
       href={SESSION_CHAT_URL(INBOX_SESSION_ID, mobile)}
       onClick={async (e) => {
         e.preventDefault();
-        if (activeId === INBOX_SESSION_ID) {
-          // If user tap the inbox again, open a new topic
+
+        if (activeId === INBOX_SESSION_ID && !mobile) {
+          // If user tap the inbox again, open a new topic.
+          // Only for desktop.
           const inboxMessages = chatSelectors.inboxActiveTopicMessages(getChatStoreState());
 
           if (inboxMessages.length > 0) {

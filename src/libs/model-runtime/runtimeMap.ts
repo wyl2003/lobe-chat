@@ -1,5 +1,7 @@
 import { LobeAi21AI } from './ai21';
+import { Lobe302AI } from './ai302';
 import { LobeAi360AI } from './ai360';
+import { LobeAiHubMixAI } from './aihubmix';
 import { LobeAnthropicAI } from './anthropic';
 import { LobeAzureOpenAI } from './azureOpenai';
 import { LobeAzureAI } from './azureai';
@@ -8,6 +10,7 @@ import { LobeBedrockAI } from './bedrock';
 import { LobeCloudflareAI } from './cloudflare';
 import { LobeCohereAI } from './cohere';
 import { LobeDeepSeekAI } from './deepseek';
+import { LobeFalAI } from './fal';
 import { LobeFireworksAI } from './fireworksai';
 import { LobeGiteeAI } from './giteeai';
 import { LobeGithubAI } from './github';
@@ -54,7 +57,9 @@ import { LobeZhipuAI } from './zhipu';
 
 export const providerRuntimeMap = {
   ai21: LobeAi21AI,
+  ai302: Lobe302AI,
   ai360: LobeAi360AI,
+  aihubmix: LobeAiHubMixAI,
   anthropic: LobeAnthropicAI,
   azure: LobeAzureOpenAI,
   azureai: LobeAzureAI,
@@ -63,6 +68,7 @@ export const providerRuntimeMap = {
   cloudflare: LobeCloudflareAI,
   cohere: LobeCohereAI,
   deepseek: LobeDeepSeekAI,
+  fal: LobeFalAI,
   fireworksai: LobeFireworksAI,
   giteeai: LobeGiteeAI,
   github: LobeGithubAI,
